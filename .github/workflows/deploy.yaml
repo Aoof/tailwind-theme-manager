@@ -3,8 +3,8 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - main  # Updated from master to main which is GitHub's default branch name
-  workflow_dispatch:  # Allow manual triggering of the workflow
+      - master
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -18,9 +18,9 @@ jobs:
       uses: actions/configure-pages@v3
       
     - name: Upload artifact
-      uses: actions/upload-pages-artifact@v2
+      uses: actions/upload-pages-artifact@v3
       with:
-        path: './public'  # Directory containing the website files
+        path: './public'
 
     - name: Deploy to GitHub Pages
       id: deployment
