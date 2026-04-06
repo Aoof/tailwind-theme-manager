@@ -48,6 +48,39 @@ const ColorUtils = {
         }
         lines.push("}");
         return lines.join('\n');
+    },
+
+    getContrastColor(oklchColor) {
+        try {
+            const color = new Color(oklchColor);
+            const l = color.oklch.l; // Lightness is 0-1
+            return l > 0.6 ? 'oklch(0.2 0.01 267)' : 'oklch(0.98 0.01 267)';
+        } catch (error) {
+            return 'oklch(0 0 0)';
+        }
+    },
+
+    generatePalette(baseHue = Math.floor(Math.random() * 360)) {
+        return {
+            'white': 'oklch(100% 0 none)',
+            'black': 'oklch(0% 0 none)',
+            'dark': `oklch(14% 0.01 ${baseHue})`,
+            'surface': `oklch(18% 0.012 ${baseHue})`,
+            'surface-2': `oklch(22% 0.015 ${baseHue})`,
+            'primary': `oklch(65% 0.18 ${baseHue})`,
+            'primary-dim': `oklch(55% 0.15 ${baseHue})`,
+            'primary-muted': `oklch(65% 0.18 ${baseHue} / 15%)`,
+            'secondary': `oklch(75% 0.12 ${(baseHue + 120) % 360})`,
+            'secondary-dim': `oklch(60% 0.1 ${(baseHue + 120) % 360})`,
+            'high': `oklch(65% 0.22 25)`,
+            'high-bg': `oklch(65% 0.22 25 / 15%)`,
+            'medium': `oklch(75% 0.18 55)`,
+            'medium-bg': `oklch(75% 0.18 55 / 15%)`,
+            'low': `oklch(70% 0.18 145)`,
+            'low-bg': `oklch(70% 0.18 145 / 15%)`,
+            'clear': `oklch(65% 0.12 220)`,
+            'clear-bg': `oklch(65% 0.12 220 / 15%)`,
+        };
     }
 };
 
@@ -139,41 +172,33 @@ const ThemeManager = {
     colorPicker: null,
     currentVariable: null,
     previousColors: {},
+    debounceTimer: null,
     
-    // Default colors (standard Tailwind colors in OKLCH format)
+    // Default colors (Colour scheme in OKLCH format)
     defaultColorsText: `
-  --background: oklch(0.14 0.01 18.4);
-  --foreground: oklch(0.984 0.003 247.858);
-  --card: oklch(0.208 0.042 265.755);
-  --card-foreground: oklch(0.984 0.003 247.858);
-  --popover: oklch(0.208 0.042 265.755);
-  --popover-foreground: oklch(0.984 0.003 247.858);
-  --primary: oklch(0.929 0.013 255.508);
-  --primary-foreground: oklch(0.208 0.042 265.755);
-  --secondary: oklch(0.279 0.041 260.031);
-  --secondary-foreground: oklch(0.984 0.003 247.858);
-  --muted: oklch(0.279 0.041 260.031);
-  --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.984 0.003 247.858);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.551 0.027 264.364);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.208 0.042 265.755);
-  --sidebar-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.279 0.041 260.031);
-  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.551 0.027 264.364);
-`,
+    --color-white: oklch(100% 0 none);
+    --color-black: oklch(0 0 none);
+
+    --color-dark:        oklch(14% 0.008 267);
+    --color-surface:     oklch(18% 0.010 267);
+    --color-surface-2:   oklch(22% 0.012 267);
+
+    --color-primary:     oklch(68% 0.18 47);
+    --color-primary-dim: oklch(52% 0.14 47);
+    --color-primary-muted: oklch(68% 0.18 47 / 15%);
+
+    --color-high:        oklch(60% 0.22 25);
+    --color-high-bg:     oklch(60% 0.22 25 / 15%);
+    --color-medium:      oklch(72% 0.18 55);
+    --color-medium-bg:   oklch(72% 0.18 55 / 15%);
+    --color-low:         oklch(68% 0.18 145);
+    --color-low-bg:      oklch(68% 0.18 145 / 15%);
+    --color-clear:       oklch(60% 0.12 220);
+    --color-clear-bg:    oklch(60% 0.12 220 / 15%);
+
+    --color-secondary:     oklch(84.773% 0.04151 290.07);
+    --color-secondary-dim: oklch(54.399% 0.02203 276.04);
+  `,
 
     init() {
         this.loadColorsFromStorage();
@@ -207,6 +232,49 @@ const ThemeManager = {
             e.preventDefault();
             this.loadColorsFromFile();
         });
+
+        // Set up Generate Palette button
+        const genBtn = document.getElementById('generate-palette');
+        if (genBtn) {
+            genBtn.addEventListener('click', () => {
+                const newPalette = ColorUtils.generatePalette();
+                this.colorVars = newPalette;
+                this.updateColorDisplay();
+                ToastManager.showToast('Generated new high-quality palette!', 'Success');
+            });
+        }
+
+        // Set up CSS output dynamic updates
+        const outputArea = document.getElementById('css-output');
+        if (outputArea) {
+            outputArea.addEventListener('input', (e) => {
+                clearTimeout(this.debounceTimer);
+                this.debounceTimer = setTimeout(() => {
+                    const parsed = ColorUtils.parseCssVariableBlock(e.target.value);
+                    if (Object.keys(parsed).length > 0) {
+                        this.colorVars = parsed;
+                        this.updateColorDisplay(false);
+                        ToastManager.showToast('Colors updated from text area.', 'Info');
+                    }
+                }, 800);
+            });
+        }
+
+        // Set up Regenerate All button
+        const regenBtn = document.getElementById('regenerate-button');
+        if (regenBtn) {
+            regenBtn.addEventListener('click', () => {
+                this.updateColorDisplay();
+            });
+        }
+
+        // Palette Export as Image functionality
+        const exportBtn = document.getElementById('export-image');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => {
+                this.exportPaletteToImage();
+            });
+        }
         
         // Set up color picker modal buttons
         document.getElementById('cancel-color').addEventListener('click', () => {
@@ -336,9 +404,14 @@ const ThemeManager = {
         });
     },
     
-    updateColorDisplay() {
+    updateColorDisplay(updateTextArea = true) {
         // Update the CSS output textarea
-        document.querySelector('textarea[readonly]').value = ColorUtils.formatCssVariables(this.colorVars);
+        if (updateTextArea) {
+            const outputArea = document.getElementById('css-output');
+            if (outputArea) {
+                outputArea.value = ColorUtils.formatCssVariables(this.colorVars);
+            }
+        }
         
         // Clear existing color variables
         const container = document.getElementById('color-variables-container');
@@ -348,20 +421,32 @@ const ThemeManager = {
         for (const variable in this.colorVars) {
             const itemDiv = document.createElement('div');
             itemDiv.id = `${variable}-container`;
-            itemDiv.className = 'color-item flex flex-col gap-2 p-3 border rounded-md dark:border-gray-700';
+            itemDiv.className = 'color-item flex flex-col gap-2 p-3 border rounded-md dark:border-gray-700 transition-all duration-300';
             
-            const hexColor = ColorUtils.convertOklchToRgb(this.colorVars[variable]);
+            const oklchValue = this.colorVars[variable];
+            const hexColor = ColorUtils.convertOklchToRgb(oklchValue);
+            const contrastColor = ColorUtils.getContrastColor(oklchValue);
+            const contrastHex = ColorUtils.convertOklchToRgb(contrastColor);
             
             itemDiv.innerHTML = `
-                <label class="font-medium">${variable}</label>
+                <div class="flex justify-between items-center">
+                    <label class="font-medium text-sm text-gray-600 dark:text-gray-400">${variable}</label>
+                    <div class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider" 
+                         style="background-color: ${hexColor}; color: ${contrastHex};">
+                         Preview Text
+                    </div>
+                </div>
                 <div class="flex items-center gap-2">
-                    <input type="color" id="${variable}-color" value="${hexColor}" data-oklch="${this.colorVars[variable]}" 
-                        class="w-12 h-12 rounded cursor-pointer border dark:border-gray-600">
-                    <input type="text" id="${variable}-value" value="${this.colorVars[variable]}" readonly
-                        class="flex-grow px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
+                    <div id="${variable}-color-preview" class="w-12 h-12 rounded shadow-sm border dark:border-gray-600 cursor-pointer flex items-center justify-center"
+                         style="background-color: ${hexColor};"
+                         onclick="ThemeManager.updateColor('${variable}')">
+                         <span style="color: ${contrastHex}; font-size: 10px; font-weight: bold;">Aa</span>
+                    </div>
+                    <input type="text" id="${variable}-value" value="${oklchValue}" readonly
+                        class="flex-grow px-3 py-2 text-sm border rounded-md bg-gray-50 dark:bg-gray-700 dark:border-gray-600 font-mono">
                     <button onclick="ThemeManager.updateColor('${variable}')" 
-                        class="px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors">
-                        Update
+                        class="p-2 bg-indigo-50 text-indigo-600 dark:bg-gray-700 dark:text-indigo-400 rounded-md hover:bg-indigo-100 dark:hover:bg-gray-600 transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
                     </button>
                 </div>
             `;
@@ -369,47 +454,29 @@ const ThemeManager = {
             container.appendChild(itemDiv);
         }
         
-        // Set up previous colors and event listeners
-        const colorItems = document.querySelectorAll('.color-item');
-        colorItems.forEach(item => {
-            const colorInput = item.querySelector('input[type="color"]');
-            const oklchValue = colorInput.dataset.oklch;
-            const varName = colorInput.id.replace('-color', '');
-            
-            this.previousColors[varName] = oklchValue;
-            
-            colorInput.addEventListener('click', (e) => {
-                e.preventDefault();
-                const variableName = e.target.id.replace('-color', '');
-                this.updateColor(variableName);
-            });
-        });
+        // Update previous colors
+        for (const variable in this.colorVars) {
+            this.previousColors[variable] = this.colorVars[variable];
+        }
     },
 
     async applyColor(variable, oklchColor) {
         try {
-            const colorInput = document.getElementById(`${variable}-color`);
-            const valueInput = document.getElementById(`${variable}-value`);
-            const previousColor = valueInput.value;
-
+            const previousColor = this.colorVars[variable];
             this.previousColors[variable] = previousColor;
-
-            valueInput.value = oklchColor;
-            colorInput.value = ColorUtils.convertOklchToRgb(oklchColor);
-            
-            // Update the colorVars object
             this.colorVars[variable] = oklchColor;
+
+            this.updateColorDisplay();
 
             const prevHexColor = ColorUtils.convertOklchToRgb(previousColor);
             document.getElementById('previous-color').style.backgroundColor = prevHexColor;
             document.getElementById('color-preview').style.backgroundColor = ColorUtils.convertOklchToRgb(oklchColor);
 
             const container = document.getElementById(`${variable}-container`);
-            container.classList.add('color-updated');
-            setTimeout(() => container.classList.remove('color-updated'), 500);
-            
-            // Update the CSS output textarea
-            document.querySelector('textarea[readonly]').value = ColorUtils.formatCssVariables(this.colorVars);
+            if (container) {
+                container.classList.add('color-updated');
+                setTimeout(() => container.classList.remove('color-updated'), 500);
+            }
 
             ToastManager.showToast(`Color "${variable}" updated successfully.`, 'Success');
         } catch (error) {
@@ -420,11 +487,8 @@ const ThemeManager = {
 
     updateColor(variable) {
         this.currentVariable = variable;
-        const colorInput = document.getElementById(variable + '-color');
-        const colorValue = document.getElementById(variable + '-value');
-
-        const hexValue = colorInput.value;
-        const oklchValue = colorValue.value;
+        const oklchValue = this.colorVars[variable];
+        const hexValue = ColorUtils.convertOklchToRgb(oklchValue);
 
         document.getElementById('color-preview').style.backgroundColor = hexValue;
         const prevColor = this.previousColors[variable] || oklchValue;
@@ -435,6 +499,65 @@ const ThemeManager = {
         document.getElementById('oklch-input').value = oklchValue;
 
         document.getElementById('color-picker-modal').style.display = 'flex';
+    },
+
+    exportPaletteToImage() {
+        const vars = Object.keys(this.colorVars);
+        if (vars.length === 0) {
+            ToastManager.showToast('No colors to export.', 'Error');
+            return;
+        }
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Define Grid Layout (e.g., 3 columns)
+        const columns = 3;
+        const rows = Math.ceil(vars.length / columns);
+        const swatchSize = 250; // Square swatches
+        
+        canvas.width = columns * swatchSize;
+        canvas.height = rows * swatchSize;
+
+        vars.forEach((name, index) => {
+            const col = index % columns;
+            const row = Math.floor(index / columns);
+            
+            const x = col * swatchSize;
+            const y = row * swatchSize;
+            
+            const colorValue = this.colorVars[name];
+            const hex = ColorUtils.convertOklchToRgb(colorValue);
+            const contrastHex = ColorUtils.convertOklchToRgb(ColorUtils.getContrastColor(colorValue));
+
+            // Background
+            ctx.fillStyle = hex;
+            ctx.fillRect(x, y, swatchSize, swatchSize);
+
+            // Text
+            ctx.fillStyle = contrastHex;
+            ctx.textAlign = 'center';
+            
+            // Variable Name
+            ctx.font = 'bold 18px sans-serif';
+            ctx.fillText(name, x + (swatchSize / 2), y + (swatchSize / 2) - 15);
+            
+            // Hex Value
+            ctx.font = 'bold 20px monospace';
+            ctx.fillText(hex.toUpperCase(), x + (swatchSize / 2), y + (swatchSize / 2) + 15);
+
+            // Large Preview Character
+            ctx.font = '900 84px sans-serif';
+            ctx.globalAlpha = 0.1;
+            ctx.fillText('Aa', x + (swatchSize / 2), y + (swatchSize / 2) + 10);
+            ctx.globalAlpha = 1.0;
+        });
+
+        const link = document.createElement('a');
+        link.download = `palette-grid-${Date.now()}.png`;
+        link.href = canvas.toDataURL('image/png', 1.0);
+        link.click();
+        ToastManager.showToast('Grid palette exported successfully.', 'Success');
     }
 };
 
