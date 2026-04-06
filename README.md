@@ -45,10 +45,8 @@ tailwind-theme-manager/
 ├── css/
 │   └── styles.css              # Main CSS file
 ├── js/
-│   ├── app.js                  # Main application logic
-│   ├── color-utils.js          # Color conversion utilities
-│   ├── toast.js                # Toast notification logic
-│   └── file-utils.js           # File operation utilities
+│   └── non-module-bundle.js    # Main application logic
+├── js/
 ├── index.html                  # Main HTML file
 ├── README.md                   # Documentation
 └── ...
