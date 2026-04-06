@@ -97,21 +97,38 @@ const ToastManager = {
         
         const toast = document.createElement('div');
         toast.id = toastId;
-        toast.className = `toast ${type.toLowerCase()}`;
+        
+        // Define icons based on type
+        const icons = {
+            'Success': '<svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>',
+            'Error': '<svg class="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>',
+            'Info': '<svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>'
+        };
+
+        toast.className = `flex items-center gap-4 p-4 mb-3 w-80 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl shadow-zinc-200/50 dark:shadow-none transform transition-all duration-300 translate-x-12 opacity-0`;
         
         toast.innerHTML = `
-            <div class="toast-content">
-                <div class="toast-title">${type}</div>
-                <div class="toast-message">${message}</div>
+            <div class="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-100 dark:border-zinc-800">
+                ${icons[type] || icons['Info']}
             </div>
-            <button class="toast-close" onclick="ToastManager.closeToast('${toastId}')">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <div class="flex-grow">
+                <div class="text-[10px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-0.5">${type}</div>
+                <div class="text-sm font-bold text-zinc-700 dark:text-zinc-200">${message}</div>
+            </div>
+            <button class="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors" onclick="ToastManager.closeToast('${toastId}')">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                 </svg>
             </button>
         `;
         
         toastContainer.appendChild(toast);
+        
+        // Trigger animation
+        requestAnimationFrame(() => {
+            toast.style.transform = 'translateX(0)';
+            toast.style.opacity = '1';
+        });
         
         setTimeout(() => {
             this.closeToast(toastId);
@@ -121,7 +138,8 @@ const ToastManager = {
     closeToast(toastId) {
         const toast = document.getElementById(toastId);
         if (toast) {
-            toast.style.animation = 'fade-out 0.3s forwards';
+            toast.style.transform = 'translateX(12px)';
+            toast.style.opacity = '0';
             setTimeout(() => {
                 toast.remove();
             }, 300);
@@ -278,7 +296,7 @@ const ThemeManager = {
         
         // Set up color picker modal buttons
         document.getElementById('cancel-color').addEventListener('click', () => {
-            document.getElementById('color-picker-modal').style.display = 'none';
+            this.closeModal();
         });
         
         document.getElementById('apply-color').addEventListener('click', async () => {
@@ -287,18 +305,43 @@ const ThemeManager = {
             const oklchColor = document.getElementById('oklch-input').value;
             await this.applyColor(this.currentVariable, oklchColor);
 
-            document.getElementById('color-picker-modal').style.display = 'none';
+            this.closeModal();
         });
         
+        // Close modal on escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') this.closeModal();
+        });
+
+        // Close modal on backdrop click
+        document.getElementById('color-picker-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'color-picker-modal') this.closeModal();
+        });
+
         // Initialize color picker
         this.initColorPicker();
     },
+
+    closeModal() {
+        const modal = document.getElementById('color-picker-modal');
+        const content = document.getElementById('color-picker-content');
+        content.classList.replace('scale-100', 'scale-95');
+        content.classList.replace('opacity-100', 'opacity-0');
+        setTimeout(() => {
+            modal.classList.replace('flex', 'hidden');
+        }, 300);
+    },
     
     initColorPicker() {
+        // Find if we are currently in dark mode to suggest themes for the picker
+        const isDark = document.documentElement.classList.contains('dark');
+        
         this.colorPicker = Pickr.create({
             el: '#color-picker',
             theme: 'classic',
             default: '#ffffff',
+            // Specify the app container for theme management context
+            appClass: isDark ? 'pcr-dark' : 'pcr-light',
             swatches: [
                 '#f44336', '#E91E63', '#9C27B0', '#673AB7',
                 '#3F51B5', '#2196F3', '#03A9F4', '#00BCD4',
@@ -312,11 +355,21 @@ const ThemeManager = {
                 interaction: {
                     hex: true,
                     rgba: true,
-                    hsla: true,
+                    hsla: false,
                     input: true,
                     clear: false,
-                    save: false
+                    save: true
                 }
+            }
+        });
+
+        // Sync Pickr classes when theme toggles
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            const currentDark = document.documentElement.classList.contains('dark');
+            const pcrApp = document.querySelector('.pcr-app');
+            if (pcrApp) {
+                // Pickr usually detaches the app to the body, so we manually handle its theme
+                pcrApp.classList.toggle('pcr-dark', currentDark);
             }
         });
         
@@ -421,7 +474,7 @@ const ThemeManager = {
         for (const variable in this.colorVars) {
             const itemDiv = document.createElement('div');
             itemDiv.id = `${variable}-container`;
-            itemDiv.className = 'color-item flex flex-col gap-2 p-3 border rounded-md dark:border-gray-700 transition-all duration-300';
+            itemDiv.className = 'group relative flex flex-col gap-4 p-5 bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200 dark:border-zinc-800 rounded-2xl hover:border-indigo-500/50 dark:hover:border-indigo-400/30 transition-all duration-300';
             
             const oklchValue = this.colorVars[variable];
             const hexColor = ColorUtils.convertOklchToRgb(oklchValue);
@@ -429,24 +482,34 @@ const ThemeManager = {
             const contrastHex = ColorUtils.convertOklchToRgb(contrastColor);
             
             itemDiv.innerHTML = `
-                <div class="flex justify-between items-center">
-                    <label class="font-medium text-sm text-gray-600 dark:text-gray-400">${variable}</label>
-                    <div class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider" 
+                <div class="flex justify-between items-start">
+                    <div class="flex flex-col">
+                        <label class="font-bold text-xs uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-1">${variable.replace('--color-', '')}</label>
+                        <span class="text-lg font-black font-mono text-zinc-800 dark:text-zinc-200 truncate max-w-[140px]">${hexColor.toUpperCase()}</span>
+                    </div>
+                    <div class="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter" 
                          style="background-color: ${hexColor}; color: ${contrastHex};">
-                         Preview Text
+                         System
                     </div>
                 </div>
-                <div class="flex items-center gap-2">
-                    <div id="${variable}-color-preview" class="w-12 h-12 rounded shadow-sm border dark:border-gray-600 cursor-pointer flex items-center justify-center"
-                         style="background-color: ${hexColor};"
-                         onclick="ThemeManager.updateColor('${variable}')">
-                         <span style="color: ${contrastHex}; font-size: 10px; font-weight: bold;">Aa</span>
+                
+                <div class="relative h-24 w-full rounded-xl overflow-hidden cursor-pointer shadow-inner border border-zinc-200/50 dark:border-white/5"
+                     style="background-color: ${hexColor};"
+                     onclick="ThemeManager.updateColor('${variable}')">
+                    <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/10 backdrop-blur-[2px]">
+                        <span class="bg-white/90 dark:bg-zinc-900/90 text-zinc-900 dark:text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-xl">Edit Color</span>
                     </div>
+                    <div class="absolute bottom-3 right-3 select-none pointer-events-none">
+                         <span style="color: ${contrastHex};" class="text-2xl font-black opacity-40">Aa</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2">
                     <input type="text" id="${variable}-value" value="${oklchValue}" readonly
-                        class="flex-grow px-3 py-2 text-sm border rounded-md bg-gray-50 dark:bg-gray-700 dark:border-gray-600 font-mono">
+                        class="flex-grow px-3 py-2 text-[10px] font-mono border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 focus:outline-none">
                     <button onclick="ThemeManager.updateColor('${variable}')" 
-                        class="p-2 bg-indigo-50 text-indigo-600 dark:bg-gray-700 dark:text-indigo-400 rounded-md hover:bg-indigo-100 dark:hover:bg-gray-600 transition-colors">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
+                        class="p-2 bg-white dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
                     </button>
                 </div>
             `;
@@ -498,7 +561,13 @@ const ThemeManager = {
         document.getElementById('hex-input').value = hexValue;
         document.getElementById('oklch-input').value = oklchValue;
 
-        document.getElementById('color-picker-modal').style.display = 'flex';
+        const modal = document.getElementById('color-picker-modal');
+        const content = document.getElementById('color-picker-content');
+        modal.classList.replace('hidden', 'flex');
+        requestAnimationFrame(() => {
+            content.classList.replace('scale-95', 'scale-100');
+            content.classList.replace('opacity-0', 'opacity-100');
+        });
     },
 
     exportPaletteToImage() {
